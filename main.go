@@ -31,6 +31,11 @@ type State struct {
 	bytes uint64
 }
 
+type diskStatus struct {
+	state map[string]uint64
+	sync.RWMutex
+}
+
 // StateMonitor maintains a map that stores the disk usage for paths
 // being
 // polled, and prints the current state every updateInterval
@@ -40,28 +45,25 @@ type State struct {
 // probably doing too many things! :D
 func StateMonitor(updateInterval time.Duration) chan<- State {
 	updates := make(chan State)
-	diskStatus := make(map[string]uint64)
-	diskStatusMutex := new(sync.RWMutex)
+	diskStatus := &diskStatus{state: make(map[string]uint64)}
 	ticker := time.NewTicker(updateInterval)
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				diskStatusMutex.Lock()
 				logState(diskStatus)
-				diskStatusMutex.Unlock()
 			case s := <-updates:
-				diskStatusMutex.Lock()
-				diskStatus[s.path] = s.bytes
-				diskStatusMutex.Unlock()
+				diskStatus.Lock()
+				diskStatus.state[s.path] = s.bytes
+				diskStatus.Unlock()
 			}
 		}
 	}()
 	go func() {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			diskStatusMutex.Lock()
-			bytes := diskStatus[*path]
-			diskStatusMutex.Unlock()
+			diskStatus.RLock()
+			bytes := diskStatus.state[*path]
+			diskStatus.RUnlock()
 			switch {
 			case bytes == 0:
 				http.Error(w, "Disk status not cached yet", http.StatusServiceUnavailable)
@@ -80,11 +82,13 @@ func StateMonitor(updateInterval time.Duration) chan<- State {
 }
 
 // logState prints a state map.
-func logState(s map[string]uint64) {
+func logState(ds *diskStatus) {
 	log.Println("Current state:")
-	for k, v := range s {
+	ds.RLock()
+	for k, v := range ds.state {
 		log.Printf(" %s %v", k, v)
 	}
+	ds.RUnlock()
 }
 
 // Path represents a filesystem directory to be polled with du
