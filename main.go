@@ -59,7 +59,7 @@ func StateMonitor(updateInterval time.Duration) chan<- State {
 				http.Error(w, "Disk status not cached yet", http.StatusServiceUnavailable)
 			case bytes > *threshold:
 				err := fmt.Sprintf("ERROR: Bytes exceed threshold (%v/%v)", bytes, *threshold)
-				http.Error(w, err, 500)
+				http.Error(w, err, http.StatusInternalServerError)
 			default:
 				fmt.Fprintf(w, "OK: %v\n", bytes)
 			}
