@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -40,20 +41,27 @@ type State struct {
 func StateMonitor(updateInterval time.Duration) chan<- State {
 	updates := make(chan State)
 	diskStatus := make(map[string]uint64)
+	diskStatusMutex := new(sync.RWMutex)
 	ticker := time.NewTicker(updateInterval)
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
+				diskStatusMutex.Lock()
 				logState(diskStatus)
+				diskStatusMutex.Unlock()
 			case s := <-updates:
+				diskStatusMutex.Lock()
 				diskStatus[s.path] = s.bytes
+				diskStatusMutex.Unlock()
 			}
 		}
 	}()
 	go func() {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			diskStatusMutex.Lock()
 			bytes := diskStatus[*path]
+			diskStatusMutex.Unlock()
 			switch {
 			case bytes == 0:
 				http.Error(w, "Disk status not cached yet", http.StatusServiceUnavailable)
@@ -130,7 +138,8 @@ func main() {
 	flag.Parse()
 
 	// Create our input and output channels.
-	pending, complete := make(chan *Path), make(chan *Path)
+	pending := make(chan *Path)
+	complete := make(chan *Path)
 
 	// Launch the StateMonitor.
 	status := StateMonitor(statusInterval)
