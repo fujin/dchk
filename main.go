@@ -30,11 +30,13 @@ type State struct {
 	bytes uint64
 }
 
-// StateMonitor maintains a map that stores the state of the URLs
+// StateMonitor maintains a map that stores the disk usage for paths
 // being
 // polled, and prints the current state every updateInterval
 // nanoseconds.
 // It returns a chan State to which resource state should be sent.
+// It also serves a HTTP Handler Func for threshold checking. It's
+// probably doing too many things! :D
 func StateMonitor(updateInterval time.Duration) chan<- State {
 	updates := make(chan State)
 	diskStatus := make(map[string]uint64)
