@@ -26,11 +26,14 @@ var (
 )
 
 // State represents the last-known state of a path
+// This is sent around between the Poller & StateMonitor's channels.
 type State struct {
 	path  string
 	bytes uint64
 }
 
+// Disk status storage, with an RWMutex for safe read/write access
+// across multiple goroutines
 type diskStatus struct {
 	state map[string]uint64
 	sync.RWMutex
@@ -53,6 +56,7 @@ func StateMonitor(updateInterval time.Duration) chan<- State {
 			case <-ticker.C:
 				logState(diskStatus)
 			case s := <-updates:
+				// Write lock
 				diskStatus.Lock()
 				diskStatus.state[s.path] = s.bytes
 				diskStatus.Unlock()
@@ -61,6 +65,7 @@ func StateMonitor(updateInterval time.Duration) chan<- State {
 	}()
 	go func() {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			// Read lock
 			diskStatus.RLock()
 			bytes := diskStatus.state[*path]
 			diskStatus.RUnlock()
@@ -84,6 +89,7 @@ func StateMonitor(updateInterval time.Duration) chan<- State {
 // logState prints a state map.
 func logState(ds *diskStatus) {
 	log.Println("Current state:")
+	// Read Lock
 	ds.RLock()
 	for k, v := range ds.state {
 		log.Printf(" %s %v", k, v)
@@ -91,7 +97,8 @@ func logState(ds *diskStatus) {
 	ds.RUnlock()
 }
 
-// Path represents a filesystem directory to be polled with du
+// Path represents a filesystem directory to be polled with du and a
+// count of errors when interacting with said path
 type Path struct {
 	path     string
 	errCount int
@@ -129,6 +136,9 @@ func (r *Path) Sleep(done chan<- *Path) {
 	done <- r
 }
 
+// Poller pulls paths off the input queue, runs Poll on the paths,
+// sends the output along the status channel then sends the path to
+// the complete channel
 func Poller(in <-chan *Path, out chan<- *Path, status chan<- State) {
 	for r := range in {
 		bytes := r.Poll()
