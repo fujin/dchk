@@ -117,10 +117,10 @@ func (r *Path) Poll() (bytes uint64) {
 	s = strings.TrimSpace(s)
 
 	// Parse tabulation
-	bytes_str := strings.Split(s, "\t")[0]
+	bytesStr := strings.Split(s, "\t")[0]
 
 	// Parse uint64 from string
-	bytes, err = strconv.ParseUint(bytes_str, 0, 64)
+	bytes, err = strconv.ParseUint(bytesStr, 0, 64)
 	if err != nil {
 		log.Fatal(err)
 		r.errCount++
