@@ -52,7 +52,15 @@ func StateMonitor(updateInterval time.Duration) chan<- State {
 	go func() {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			bytes := diskStatus[*path]
-			fmt.Fprintln(w, bytes)
+			switch {
+			case bytes == 0:
+				http.Error(w, "Disk status not cached yet", http.StatusServiceUnavailable)
+			case bytes > *threshold:
+				err := fmt.Sprintf("ERROR: Bytes exceed threshold (%v/%v)", bytes, *threshold)
+				http.Error(w, err, 500)
+			default:
+				fmt.Fprintf(w, "OK: %v\n", bytes)
+			}
 		})
 		if err := http.ListenAndServe(*addr, nil); err != nil {
 			log.Fatal("ListenAndServe failed: ", err)
@@ -116,6 +124,9 @@ func Poller(in <-chan *Path, out chan<- *Path, status chan<- State) {
 }
 
 func main() {
+	// parse CLI flags
+	flag.Parse()
+
 	// Create our input and output channels.
 	pending, complete := make(chan *Path), make(chan *Path)
 
