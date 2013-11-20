@@ -67,8 +67,8 @@ func StateMonitor(updateInterval time.Duration) chan<- State {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			// Read lock
 			diskStatus.RLock()
+			defer diskStatus.RUnlock()
 			bytes := diskStatus.state[*path]
-			diskStatus.RUnlock()
 			switch {
 			case bytes == 0:
 				http.Error(w, "Disk status not cached yet", http.StatusServiceUnavailable)
@@ -91,10 +91,10 @@ func logState(ds *diskStatus) {
 	log.Println("Current state:")
 	// Read Lock
 	ds.RLock()
+	defer ds.RUnlock()
 	for k, v := range ds.state {
 		log.Printf(" %s %v", k, v)
 	}
-	ds.RUnlock()
 }
 
 // Path represents a filesystem directory to be polled with du and a
