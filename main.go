@@ -23,6 +23,7 @@ var (
 	threshold = flag.Uint64("threshold", uint64(1.074*10E11), "Threshold to start serving 500's over HTTP")
 	addr      = flag.String("addr", ":8080", "Listen address for HTTP")
 	path      = flag.String("path", "/mnt/storage", "The path to query for disk usage")
+	override  = flag.Bool("override", false, "Boolean to override check response for HTTP handler")
 )
 
 // State represents the last-known state of a path
@@ -72,11 +73,11 @@ func StateMonitor(updateInterval time.Duration) chan<- State {
 			switch {
 			case bytes == 0:
 				http.Error(w, "Disk status not cached yet", http.StatusServiceUnavailable)
-			case bytes > *threshold:
+			case bytes > *threshold && *override == false:
 				err := fmt.Sprintf("ERROR: Bytes exceed threshold (%v/%v)", bytes, *threshold)
 				http.Error(w, err, http.StatusInternalServerError)
 			default:
-				fmt.Fprintf(w, "OK: %v\n", bytes)
+				fmt.Fprintf(w, "OK: %v is %v bytes; override set to %v\n", *path, bytes, *override)
 			}
 		})
 		if err := http.ListenAndServe(*addr, nil); err != nil {
